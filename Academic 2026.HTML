@@ -1,0 +1,445 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Interactive Scoring Structure Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Chosen Palette: Warm Neutrals -->
+    <!-- Application Structure Plan: The application uses a sidebar navigation for the 8 subject categories and a main content area. This structure was chosen to make a large, dense report easily navigable without extensive scrolling. Users can quickly switch between subjects. The main area features a dynamic donut chart for a quick visual summary of assessment weights, paired with a detailed table for in-depth information. This dual-view approach caters to different user needs—from quick overviews to detailed analysis—and turns a static document into an interactive, user-friendly tool. -->
+    <!-- Visualization & Content Choices: Report Info: Assessment percentage breakdown per category. -> Goal: Inform & Compare. -> Viz/Presentation Method: A dynamic donut chart (for high-level visual comparison) and a detailed HTML table (for specifics). -> Interaction: Clicking a category in the sidebar instantly updates both the chart and the table with the relevant data. -> Justification: This combination provides both an immediate visual impression of the scoring balance and the granular detail needed by teachers and parents. -> Library/Method: Chart.js was chosen for its responsive, canvas-based rendering and straightforward API for dynamic data updates. -->
+    <!-- CONFIRMATION: NO SVG graphics used. NO Mermaid JS used. -->
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #FDFBF8;
+            color: #4A4A4A;
+        }
+        .chart-container {
+            position: relative;
+            width: 100%;
+            max-width: 450px;
+            margin-left: auto;
+            margin-right: auto;
+            height: 300px;
+        }
+        @media (min-width: 768px) {
+            .chart-container {
+                height: 350px;
+            }
+        }
+        .nav-link {
+            transition: all 0.2s ease-in-out;
+            border-left: 3px solid transparent;
+        }
+        .nav-link.active {
+            background-color: #EAE2D9;
+            color: #8C6D46;
+            font-weight: 600;
+            border-left-color: #8C6D46;
+        }
+        .nav-link:hover:not(.active) {
+            background-color: #F5F1EC;
+            border-left-color: #C3B099;
+            transform: translateX(4px);
+        }
+        .table-cell {
+            border: 1px solid #EAE2D9;
+            padding: 12px;
+        }
+        .nav-group-header {
+            padding: 0.75rem 0.75rem 0.25rem;
+            font-size: 0.75rem;
+            font-weight: 700;
+            color: #A98D6D;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            display: flex;
+            align-items: center;
+        }
+        .nav-group-header span {
+            margin-right: 0.5rem;
+        }
+        .card {
+            background-color: white;
+            border-radius: 0.75rem;
+            box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.05), 0 2px 4px -2px rgb(0 0 0 / 0.05);
+            transition: all 0.3s ease-in-out;
+        }
+        .card:hover {
+             box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.07), 0 4px 6px -4px rgb(0 0 0 / 0.07);
+             transform: translateY(-2px);
+        }
+        .content-fade-in {
+            animation: fadeIn 0.5s ease-in-out;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        tbody tr {
+            transition: background-color 0.2s ease-in-out;
+        }
+        tbody tr:hover {
+            background-color: #F9F6F2;
+        }
+    </style>
+</head>
+<body class="antialiased">
+
+    <div class="flex min-h-screen">
+        <aside class="w-72 bg-[#F9F6F2] p-4 hidden lg:block fixed h-full overflow-y-auto border-r border-[#EAE2D9]">
+            <h1 class="text-2xl font-bold text-[#8C6D46] mb-6 px-3 flex items-center">
+                <span class="text-3xl mr-2">📊</span> Scoring Structure
+            </h1>
+            <nav id="desktop-nav" class="space-y-1">
+            </nav>
+        </aside>
+
+        <main class="flex-1 lg:ml-72">
+            <header class="bg-white/80 backdrop-blur-lg sticky top-0 z-10 p-4 border-b border-[#EAE2D9] flex justify-between items-center">
+                <h2 id="main-title" class="text-2xl font-bold text-gray-800">Assessment Structure Summary</h2>
+                 <div class="lg:hidden w-full">
+                    <select id="mobile-nav" class="w-full rounded-lg border-gray-300 shadow-sm focus:border-[#8C6D46] focus:ring focus:ring-[#8C6D46] focus:ring-opacity-50">
+                    </select>
+                </div>
+            </header>
+
+            <div id="content-area" class="p-6 md:p-8">
+            </div>
+        </main>
+    </div>
+
+    <script>
+        const assessmentData = {
+            summary: {
+                title: "Assessment Structure Summary",
+                isSummary: true,
+                content: `
+                    <div class="card p-6">
+                        <p class="mb-6 text-gray-600">This document outlines a revised assessment structure, categorized by its purpose into <strong>Formative Assessment</strong> (ongoing assessment to improve student learning) and <strong>Summative Assessment</strong> (assessment to evaluate student learning at the end of an instructional period). It emphasizes the use of <strong>Rubrics</strong> as a key tool for evaluating skill-based and creative work to ensure transparency and fairness in scoring. Select a subject from the navigation to view a detailed breakdown.</p>
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-left border-collapse">
+                                <thead>
+                                    <tr class="bg-[#F5F1EC]">
+                                        <th class="table-cell font-semibold">Subject</th>
+                                        <th class="table-cell font-semibold">Formative Assessment (Weight)</th>
+                                        <th class="table-cell font-semibold">Summative Assessment (Weight)</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr class="bg-white"><td class="table-cell">English</td><td class="table-cell">Scored (40%), Rubric-Based (30%), Skill-Based (10%)</td><td class="table-cell">Final Exam (20%)</td></tr>
+                                    <tr class="bg-gray-50"><td class="table-cell">Maths</td><td class="table-cell">Scored (40%), Rubric-Based (30%), Skill-Based (10%)</td><td class="table-cell">Final Exam (20%)</td></tr>
+                                    <tr class="bg-white"><td class="table-cell">Science</td><td class="table-cell">Scored (40%), Rubric-Based (30%), Skill-Based (10%)</td><td class="table-cell">Final Exam (20%)</td></tr>
+                                    <tr class="bg-gray-50"><td class="table-cell">History</td><td class="table-cell">Participation (50%), Project-Based (50%)</td><td class="table-cell">N/A (0%)</td></tr>
+                                    <tr class="bg-white"><td class="table-cell">Geography</td><td class="table-cell">Participation (50%), Project-Based (50%)</td><td class="table-cell">N/A (0%)</td></tr>
+                                    <tr class="bg-gray-50"><td class="table-cell">Global Skills</td><td class="table-cell">Participation (50%), Project-Based (50%)</td><td class="table-cell">N/A (0%)</td></tr>
+                                    <tr class="bg-white"><td class="table-cell">Thai</td><td class="table-cell">Communication Skills (70%), Projects & Activities (30%)</td><td class="table-cell">N/A (0%)</td></tr>
+                                    <tr class="bg-gray-50"><td class="table-cell">Chinese</td><td class="table-cell">Communication Skills (70%), Projects & Activities (30%)</td><td class="table-cell">N/A (0%)</td></tr>
+                                    <tr class="bg-white"><td class="table-cell">ICT</td><td class="table-cell">Portfolio (60%), Practical Skills (30%), Theory (10%)</td><td class="table-cell">N/A (0%)</td></tr>
+                                    <tr class="bg-gray-50"><td class="table-cell">Data Literacy</td><td class="table-cell">Portfolio (60%), Practical Skills (30%), Theory (10%)</td><td class="table-cell">N/A (0%)</td></tr>
+                                    <tr class="bg-white"><td class="table-cell">ART</td><td class="table-cell">Portfolio (60%), Practical Skills (30%), Theory (10%)</td><td class="table-cell">N/A (0%)</td></tr>
+                                    <tr class="bg-gray-50"><td class="table-cell">Music</td><td class="table-cell">Portfolio (60%), Practical Skills (30%), Theory (10%)</td><td class="table-cell">N/A (0%)</td></tr>
+                                    <tr class="bg-white"><td class="table-cell">Sport Club</td><td class="table-cell">Portfolio (60%), Practical Skills (30%), Theory (10%)</td><td class="table-cell">N/A (0%)</td></tr>
+                                    <tr class="bg-gray-50"><td class="table-cell">Writing & Presentation</td><td class="table-cell">Rubric-Based (80%), Scored (20%)</td><td class="table-cell">N/A (0%)</td></tr>
+                                    <tr class="bg-white"><td class="table-cell">Problem Solving</td><td class="table-cell">Rubric-Based (80%), Scored (20%)</td><td class="table-cell">N/A (0%)</td></tr>
+                                    <tr class="bg-gray-50"><td class="table-cell">Wellbeing</td><td class="table-cell">Rubric-Based (80%), Scored (20%)</td><td class="table-cell">N/A (0%)</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                `
+            },
+            english: {
+                title: "English",
+                objective: "To cultivate sophisticated communication and analytical skills by balancing the development of foundational content understanding (Formative) with the comprehensive evaluation of academic achievement (Summative). The focus is on applying literary and rhetorical concepts to complex texts and real-world scenarios.",
+                chartData: { labels: ['Scored Assessments', 'Rubric-Based Assessments', 'Skill-Based Assessment', 'Final Exam'], values: [40, 30, 10, 20] },
+                tableData: `<tr class="bg-gray-100"><td colspan="4" class="table-cell font-bold">Formative Assessment (80%)</td></tr><tr class="bg-white"><td class="table-cell pl-8">• Scored Assessments</td><td class="table-cell">40%</td><td class="table-cell">Unit Tests & Quizzes designed to test content knowledge, including vocabulary, literary terms, and grammatical principles.</td><td class="table-cell">N/A</td></tr><tr class="bg-white"><td class="table-cell pl-8">• Rubric-Based Assessments</td><td class="table-cell">30%</td><td class="table-cell">Includes literary analysis essays, research papers, and creative writing portfolios. Assessed on the entire process from conception to final product.</td><td class="table-cell"><strong>Argument & Analysis:</strong> Nuanced Thesis Statement, Depth and Originality of Analysis, Sophisticated Use and Integration of Textual Evidence. <br> <strong>Structure & Language:</strong> Logical and Cohesive Organization, Sentence Fluency and Variety, Precise Vocabulary, Command of Grammar & Mechanics.</td></tr><tr class="bg-white"><td class="table-cell pl-8">• Skill-Based Assessment</td><td class="table-cell">10%</td><td class="table-cell">Targeted exercises for listening comprehension (e.g., analyzing podcasts, lectures) and speaking skills (e.g., Socratic seminars, impromptu speeches).</td><td class="table-cell">N/A (Often uses checklists or rating scales for comprehension, active listening, and oral fluency)</td></tr><tr class="bg-gray-100"><td colspan="4" class="table-cell font-bold">Summative Assessment (20%)</td></tr><tr class="bg-white"><td class="table-cell pl-8">• Final Exam</td><td class="table-cell">20%</td><td class="table-cell">A comprehensive exam including essay questions and text analysis to evaluate cumulative learning.</td><td class="table-cell">N/A</td></tr>`
+            },
+            maths: {
+                title: "Maths",
+                objective: "To build a strong foundation in mathematical theory and its practical application, balancing content knowledge (Formative) with the evaluation of problem-solving prowess (Summative). The goal is to foster logical reasoning and analytical thinking.",
+                chartData: { labels: ['Scored Assessments', 'Rubric-Based Assessments', 'Skill-Based Assessment', 'Final Exam'], values: [40, 30, 10, 20] },
+                tableData: `<tr class="bg-gray-100"><td colspan="4" class="table-cell font-bold">Formative Assessment (80%)</td></tr><tr class="bg-white"><td class="table-cell pl-8">• Scored Assessments</td><td class="table-cell">40%</td><td class="table-cell">Unit Tests & Quizzes focused on core concepts, theorems, and calculation skills to ensure foundational mastery.</td><td class="table-cell">N/A</td></tr><tr class="bg-white"><td class="table-cell pl-8">• Rubric-Based Assessments</td><td class="table-cell">30%</td><td class="table-cell">Real-world application projects (e.g., financial modeling, statistical analysis of data sets). Assessed on process and the application of concepts.</td><td class="table-cell"><strong>Process:</strong> Selection of Appropriate Problem-Solving Strategy, Logical Mathematical Reasoning, Clarity and Organization of Steps. <br> <strong>Solution:</strong> Accuracy of Calculations, Correct Application of Concepts, Effective Data Representation and Interpretation.</td></tr><tr class="bg-white"><td class="table-cell pl-8">• Skill-Based Assessment</td><td class="table-cell">10%</td><td class="table-cell">Focused activities on statistical thinking, logical deduction, and abstract problem-solving skills.</td><td class="table-cell">N/A (Often uses checklists or rating scales for strategy selection and logical consistency)</td></tr><tr class="bg-gray-100"><td colspan="4" class="table-cell font-bold">Summative Assessment (20%)</td></tr><tr class="bg-white"><td class="table-cell pl-8">• Final Exam</td><td class="table-cell">20%</td><td class="table-cell">A comprehensive exam with multi-step problems to evaluate cumulative learning and application.</td><td class="table-cell">N/A</td></tr>`
+            },
+            science: {
+                title: "Science",
+                objective: "To foster a deep understanding of the scientific method through hands-on inquiry, balancing theoretical knowledge (Formative) with the evaluation of experimental and analytical skills (Summative).",
+                chartData: { labels: ['Scored Assessments', 'Rubric-Based Assessments', 'Skill-Based Assessment', 'Final Exam'], values: [40, 30, 10, 20] },
+                tableData: `<tr class="bg-gray-100"><td colspan="4" class="table-cell font-bold">Formative Assessment (80%)</td></tr><tr class="bg-white"><td class="table-cell pl-8">• Scored Assessments</td><td class="table-cell">40%</td><td class="table-cell">Unit Tests & Quizzes to assess understanding of core scientific concepts, principles, and vocabulary.</td><td class="table-cell">N/A</td></tr><tr class="bg-white"><td class="table-cell pl-8">• Rubric-Based Assessments</td><td class="table-cell">30%</td><td class="table-cell">Formal lab reports and long-term inquiry-based projects. Assessed on adherence to the scientific method and depth of data analysis.</td><td class="table-cell"><strong>Scientific Method:</strong> Testable Hypothesis, Validity and Reproducibility of Method/Procedure, Adherence to Safety Protocols. <br> <strong>Analysis:</strong> Accuracy and Precision of Data Recording, Sophistication of Data Interpretation, Validity of Conclusion, Thorough Error Analysis.</td></tr><tr class="bg-white"><td class="table-cell pl-8">• Skill-Based Assessment</td><td class="table-cell">10%</td><td class="table-cell">Practical lab skills, scientific inquiry techniques, and use of laboratory equipment.</td><td class="table-cell">N/A (Often uses checklists for lab techniques, safety procedures, and equipment handling)</td></tr><tr class="bg-gray-100"><td colspan="4" class="table-cell font-bold">Summative Assessment (20%)</td></tr><tr class="bg-white"><td class="table-cell pl-8">• Final Exam</td><td class="table-cell">20%</td><td class="table-cell">A comprehensive exam with data analysis questions to evaluate cumulative learning.</td><td class="table-cell">N/A</td></tr>`
+            },
+            history: {
+                title: "History",
+                objective: "To develop informed, analytical, and engaged global citizens by focusing entirely on the formative development of critical thinking, research, argumentation, and communication skills.",
+                chartData: { labels: ['Participation Assessment', 'Project-Based Assessment'], values: [50, 50] },
+                tableData: `<tr class="bg-gray-100"><td colspan="4" class="table-cell font-bold">Formative Assessment (100%)</td></tr><tr class="bg-white"><td class="table-cell pl-8">• Participation Assessment</td><td class="table-cell">50%</td><td class="table-cell">Structured debates and Socratic seminars requiring students to express well-reasoned, evidence-based opinions.</td><td class="table-cell"><strong>Contribution Quality:</strong> Use of Specific Evidence, Connecting Ideas, Building on or Challenging Others' Points Respectfully. <br> <strong>Behavior:</strong> Active and Attentive Listening, Respect for Diverse Perspectives.</td></tr><tr class="bg-white"><td class="table-cell pl-8">• Project-Based Assessment</td><td class="table-cell">50%</td><td class="table-cell">The process of formulating a research question, gathering and evaluating sources, and synthesizing information.</td><td class="table-cell"><strong>Research:</strong> Clarity and Focus of Research Question, Quality and Variety of Primary/Secondary Sources, Critical Evaluation of Source Bias. <br> <strong>Argument:</strong> Strength and Nuance of Thesis/Argument, Seamless Integration of Evidence.</td></tr>`
+            },
+            geography: {
+                title: "Geography",
+                objective: "To develop informed, analytical, and engaged global citizens by focusing entirely on the formative development of critical thinking, research, argumentation, and communication skills.",
+                chartData: { labels: ['Participation Assessment', 'Project-Based Assessment'], values: [50, 50] },
+                tableData: `<tr class="bg-gray-100"><td colspan="4" class="table-cell font-bold">Formative Assessment (100%)</td></tr><tr class="bg-white"><td class="table-cell pl-8">• Participation Assessment</td><td class="table-cell">50%</td><td class="table-cell">Structured debates and Socratic seminars requiring students to express well-reasoned, evidence-based opinions.</td><td class="table-cell"><strong>Contribution Quality:</strong> Use of Specific Evidence, Connecting Ideas, Building on or Challenging Others' Points Respectfully. <br> <strong>Behavior:</strong> Active and Attentive Listening, Respect for Diverse Perspectives.</td></tr><tr class="bg-white"><td class="table-cell pl-8">• Project-Based Assessment</td><td class="table-cell">50%</td><td class="table-cell">The process of formulating a research question, gathering and evaluating sources, and synthesizing information.</td><td class="table-cell"><strong>Research:</strong> Clarity and Focus of Research Question, Quality and Variety of Primary/Secondary Sources, Critical Evaluation of Source Bias. <br> <strong>Argument:</strong> Strength and Nuance of Thesis/Argument, Seamless Integration of Evidence.</td></tr>`
+            },
+            globalSkills: {
+                title: "Global Skills",
+                objective: "To develop informed, analytical, and engaged global citizens by focusing entirely on the formative development of critical thinking, research, argumentation, and communication skills.",
+                chartData: { labels: ['Participation Assessment', 'Project-Based Assessment'], values: [50, 50] },
+                tableData: `<tr class="bg-gray-100"><td colspan="4" class="table-cell font-bold">Formative Assessment (100%)</td></tr><tr class="bg-white"><td class="table-cell pl-8">• Participation Assessment</td><td class="table-cell">50%</td><td class="table-cell">Structured debates and Socratic seminars requiring students to express well-reasoned, evidence-based opinions.</td><td class="table-cell"><strong>Contribution Quality:</strong> Use of Specific Evidence, Connecting Ideas, Building on or Challenging Others' Points Respectfully. <br> <strong>Behavior:</strong> Active and Attentive Listening, Respect for Diverse Perspectives.</td></tr><tr class="bg-white"><td class="table-cell pl-8">• Project-Based Assessment</td><td class="table-cell">50%</td><td class="table-cell">The process of formulating a research question, gathering and evaluating sources, and synthesizing information.</td><td class="table-cell"><strong>Research:</strong> Clarity and Focus of Research Question, Quality and Variety of Primary/Secondary Sources, Critical Evaluation of Source Bias. <br> <strong>Argument:</strong> Strength and Nuance of Thesis/Argument, Seamless Integration of Evidence.</td></tr>`
+            },
+            thai: {
+                title: "Thai",
+                objective: "To develop functional and culturally-aware communicators by focusing entirely on the formative development of comprehensive skills across all four domains (listening, speaking, reading, writing).",
+                chartData: { labels: ['Communication Skills Assessment', 'Project and Activity Assessment'], values: [70, 30] },
+                tableData: `<tr class="bg-gray-100"><td colspan="4" class="table-cell font-bold">Formative Assessment (100%)</td></tr><tr class="bg-white"><td class="table-cell pl-8">• Communication Skills Assessment</td><td class="table-cell">70%</td><td class="table-cell">Includes spontaneous conversations, formal presentations, interviews, and role-playing scenarios.</td><td class="table-cell"><strong>Speaking:</strong> Fluency and Spontaneity, Pronunciation and Intonation, Grammatical Accuracy and Complexity, Breadth of Vocabulary. <br> <strong>Writing:</strong> Grammatical Accuracy, Logical Organization, Richness of Vocabulary, Sentence Structure Variety.</td></tr><tr class="bg-white"><td class="table-cell pl-8">• Project and Activity Assessment</td><td class="table-cell">30%</td><td class="table-cell">Includes cultural research projects, creating short films or podcasts, and translation tasks.</td><td class="table-cell"><strong>Content:</strong> Cultural Accuracy and Nuance, Depth of Understanding. <br> <strong>Language:</strong> Complexity and Register, Appropriate Use of Idioms and Expressions, Creativity.</td></tr>`
+            },
+            chinese: {
+                title: "Chinese",
+                objective: "To develop functional and culturally-aware communicators by focusing entirely on the formative development of comprehensive skills across all four domains (listening, speaking, reading, writing).",
+                chartData: { labels: ['Communication Skills Assessment', 'Project and Activity Assessment'], values: [70, 30] },
+                tableData: `<tr class="bg-gray-100"><td colspan="4" class="table-cell font-bold">Formative Assessment (100%)</td></tr><tr class="bg-white"><td class="table-cell pl-8">• Communication Skills Assessment</td><td class="table-cell">70%</td><td class="table-cell">Includes spontaneous conversations, formal presentations, interviews, and role-playing scenarios.</td><td class="table-cell"><strong>Speaking:</strong> Fluency and Spontaneity, Pronunciation and Intonation, Grammatical Accuracy and Complexity, Breadth of Vocabulary. <br> <strong>Writing:</strong> Grammatical Accuracy, Logical Organization, Richness of Vocabulary, Sentence Structure Variety, Character Accuracy and Stroke Order (Chinese).</td></tr><tr class="bg-white"><td class="table-cell pl-8">• Project and Activity Assessment</td><td class="table-cell">30%</td><td class="table-cell">Includes cultural research projects, creating short films or podcasts, and translation tasks.</td><td class="table-cell"><strong>Content:</strong> Cultural Accuracy and Nuance, Depth of Understanding. <br> <strong>Language:</strong> Complexity and Register, Appropriate Use of Idioms and Expressions, Creativity.</td></tr>`
+            },
+            ict: {
+                title: "ICT",
+                objective: "To nurture technical proficiency, logical problem-solving, and creative expression through digital media and data analysis (100% Formative Assessment).",
+                chartData: { labels: ['Portfolio / Coursework', 'Practical Skills Assessment', 'Theoretical Understanding'], values: [60, 30, 10] },
+                tableData: `<tr class="bg-gray-100"><td colspan="4" class="table-cell font-bold">Formative Assessment (100%)</td></tr><tr class="bg-white"><td class="table-cell pl-8">• Portfolio / Coursework</td><td class="table-cell">60%</td><td class="table-cell">A collection of works demonstrating progress in coding, software use, or data analysis techniques.</td><td class="table-cell"><strong>Growth:</strong> Mastery of Foundational Concepts, Experimentation with New Tools. <br> <strong>Technique:</strong> Code Efficiency, Craftsmanship, Data Visualization Clarity.</td></tr><tr class="bg-white"><td class="table-cell pl-8">• Practical Skills Assessment</td><td class="table-cell">30%</td><td class="table-cell">Direct assessment of essential skills (e.g., timed coding challenges, database queries, spreadsheet functions).</td><td class="table-cell">Accuracy, Precision, Efficiency, Adherence to Best Practices.</td></tr><tr class="bg-white"><td class="table-cell pl-8">• Theoretical Understanding and Reflection</td><td class="table-cell">10%</td><td class="table-cell">Short quizzes testing understanding of principles and written analyses of one's own work.</td><td class="table-cell">Depth of Insight, Critical Self-Awareness, Analysis of Process.</td></tr>`
+            },
+            dataLiteracy: {
+                title: "Data Literacy",
+                objective: "To nurture technical proficiency, logical problem-solving, and creative expression through digital media and data analysis (100% Formative Assessment).",
+                chartData: { labels: ['Portfolio / Coursework', 'Practical Skills Assessment', 'Theoretical Understanding'], values: [60, 30, 10] },
+                tableData: `<tr class="bg-gray-100"><td colspan="4" class="table-cell font-bold">Formative Assessment (100%)</td></tr><tr class="bg-white"><td class="table-cell pl-8">• Portfolio / Coursework</td><td class="table-cell">60%</td><td class="table-cell">A collection of works demonstrating progress in coding, software use, or data analysis techniques.</td><td class="table-cell"><strong>Growth:</strong> Mastery of Foundational Concepts, Experimentation with New Tools. <br> <strong>Technique:</strong> Code Efficiency, Craftsmanship, Data Visualization Clarity.</td></tr><tr class="bg-white"><td class="table-cell pl-8">• Practical Skills Assessment</td><td class="table-cell">30%</td><td class="table-cell">Direct assessment of essential skills (e.g., timed coding challenges, database queries, spreadsheet functions).</td><td class="table-cell">Accuracy, Precision, Efficiency, Adherence to Best Practices.</td></tr><tr class="bg-white"><td class="table-cell pl-8">• Theoretical Understanding and Reflection</td><td class="table-cell">10%</td><td class="table-cell">Short quizzes testing understanding of principles and written analyses of one's own work.</td><td class="table-cell">Depth of Insight, Critical Self-Awareness, Analysis of Process.</td></tr>`
+            },
+            art: {
+                title: "ART",
+                objective: "To nurture technical proficiency, creative expression, and personal voice through artistic and physical practice (100% Formative Assessment).",
+                chartData: { labels: ['Portfolio / Coursework', 'Practical Skills Assessment', 'Theoretical Understanding'], values: [60, 30, 10] },
+                tableData: `<tr class="bg-gray-100"><td colspan="4" class="table-cell font-bold">Formative Assessment (100%)</td></tr><tr class="bg-white"><td class="table-cell pl-8">• Portfolio / Coursework</td><td class="table-cell">60%</td><td class="table-cell">A collection of works demonstrating progress and experimentation over the course of the term.</td><td class="table-cell"><strong>Growth:</strong> Clear Mastery of Foundational Skills (e.g., brushwork, scales, athletic form). <br> <strong>Technique:</strong> Craftsmanship, Technical Execution, Attention to Detail.</td></tr><tr class="bg-white"><td class="table-cell pl-8">• Practical Skills Assessment</td><td class="table-cell">30%</td><td class="table-cell">Direct assessment of essential skills for the subject (e.g., playing scales, drawing from observation, performing basic drills).</td><td class="table-cell">Accuracy, Precision, Control, Consistency.</td></tr><tr class="bg-white"><td class="table-cell pl-8">• Theoretical Understanding and Reflection</td><td class="table-cell">10%</td><td class="table-cell">Short quizzes testing understanding of relevant principles, history, or theory and written analyses of one's own work.</td><td class="table-cell">Depth of Insight, Critical Self-Awareness, Articulation of Future Goals.</td></tr>`
+            },
+            music: {
+                title: "Music",
+                objective: "To nurture technical proficiency, creative expression, and personal voice through artistic and physical practice (100% Formative Assessment).",
+                chartData: { labels: ['Portfolio / Coursework', 'Practical Skills Assessment', 'Theoretical Understanding'], values: [60, 30, 10] },
+                tableData: `<tr class="bg-gray-100"><td colspan="4" class="table-cell font-bold">Formative Assessment (100%)</td></tr><tr class="bg-white"><td class="table-cell pl-8">• Portfolio / Coursework</td><td class="table-cell">60%</td><td class="table-cell">A collection of works demonstrating progress and experimentation over the course of the term.</td><td class="table-cell"><strong>Growth:</strong> Clear Mastery of Foundational Skills (e.g., brushwork, scales, athletic form). <br> <strong>Technique:</strong> Craftsmanship, Technical Execution, Attention to Detail.</td></tr><tr class="bg-white"><td class="table-cell pl-8">• Practical Skills Assessment</td><td class="table-cell">30%</td><td class="table-cell">Direct assessment of essential skills for the subject (e.g., playing scales, drawing from observation, performing basic drills).</td><td class="table-cell">Accuracy, Precision, Control, Consistency.</td></tr><tr class="bg-white"><td class="table-cell pl-8">• Theoretical Understanding and Reflection</td><td class="table-cell">10%</td><td class="table-cell">Short quizzes testing understanding of relevant principles, history, or theory and written analyses of one's own work.</td><td class="table-cell">Depth of Insight, Critical Self-Awareness, Articulation of Future Goals.</td></tr>`
+            },
+            sportClub: {
+                title: "Sport Club",
+                objective: "To nurture technical proficiency, creative expression, and personal voice through artistic and physical practice (100% Formative Assessment).",
+                chartData: { labels: ['Portfolio / Coursework', 'Practical Skills Assessment', 'Theoretical Understanding'], values: [60, 30, 10] },
+                tableData: `<tr class="bg-gray-100"><td colspan="4" class="table-cell font-bold">Formative Assessment (100%)</td></tr><tr class="bg-white"><td class="table-cell pl-8">• Portfolio / Coursework</td><td class="table-cell">60%</td><td class="table-cell">A collection of works demonstrating progress and experimentation over the course of the term.</td><td class="table-cell"><strong>Growth:</strong> Clear Mastery of Foundational Skills (e.g., brushwork, scales, athletic form). <br> <strong>Technique:</strong> Craftsmanship, Technical Execution, Attention to Detail.</td></tr><tr class="bg-white"><td class="table-cell pl-8">• Practical Skills Assessment</td><td class="table-cell">30%</td><td class="table-cell">Direct assessment of essential skills for the subject (e.g., playing scales, drawing from observation, performing basic drills).</td><td class="table-cell">Accuracy, Precision, Control, Consistency.</td></tr><tr class="bg-white"><td class="table-cell pl-8">• Theoretical Understanding and Reflection</td><td class="table-cell">10%</td><td class="table-cell">Short quizzes testing understanding of relevant principles, history, or theory and written analyses of one's own work.</td><td class="table-cell">Depth of Insight, Critical Self-Awareness, Articulation of Future Goals.</td></tr>`
+            },
+            writingPresentation: {
+                title: "Writing & Presentation",
+                objective: "To explicitly develop and assess transferable life skills essential for academic and personal success through authentic, real-world tasks (100% Formative Assessment).",
+                chartData: { labels: ['Rubric-Based Assessments', 'Scored Assessments'], values: [80, 20] },
+                tableData: `<tr class="bg-gray-100"><td colspan="4" class="table-cell font-bold">Formative Assessment (100%)</td></tr><tr class="bg-white"><td class="table-cell pl-8">• Rubric-Based Assessments</td><td class="table-cell">80%</td><td class="table-cell">Tangible outputs such as persuasive essays, detailed problem-solving plans, or personal growth journals.</td><td class="table-cell"><strong>Writing:</strong> Clarity, Structure, Audience Awareness, Persuasive Tone. <br> <strong>Problem Solving:</strong> Accurate Identification of Variables, Logical Process, Evaluation of Options.</td></tr><tr class="bg-white"><td class="table-cell pl-8">• Scored Assessments</td><td class="table-cell">20%</td><td class="table-cell">Testing understanding of basic principles like grammar, logical fallacies, or concepts of mental health.</td><td class="table-cell">N/A</td></tr>`
+            },
+            problemSolving: {
+                title: "Problem Solving",
+                objective: "To explicitly develop and assess transferable life skills essential for academic and personal success through authentic, real-world tasks (100% Formative Assessment).",
+                chartData: { labels: ['Rubric-Based Assessments', 'Scored Assessments'], values: [80, 20] },
+                tableData: `<tr class="bg-gray-100"><td colspan="4" class="table-cell font-bold">Formative Assessment (100%)</td></tr><tr class="bg-white"><td class="table-cell pl-8">• Rubric-Based Assessments</td><td class="table-cell">80%</td><td class="table-cell">Tangible outputs such as persuasive essays, detailed problem-solving plans, or personal growth journals.</td><td class="table-cell"><strong>Writing:</strong> Clarity, Structure, Audience Awareness, Persuasive Tone. <br> <strong>Problem Solving:</strong> Accurate Identification of Variables, Logical Process, Evaluation of Options.</td></tr><tr class="bg-white"><td class="table-cell pl-8">• Scored Assessments</td><td class="table-cell">20%</td><td class="table-cell">Testing understanding of basic principles like grammar, logical fallacies, or concepts of mental health.</td><td class="table-cell">N/A</td></tr>`
+            },
+            wellbeing: {
+                title: "Wellbeing",
+                objective: "To explicitly develop and assess transferable life skills essential for academic and personal success through authentic, real-world tasks (100% Formative Assessment).",
+                chartData: { labels: ['Rubric-Based Assessments', 'Scored Assessments'], values: [80, 20] },
+                tableData: `<tr class="bg-gray-100"><td colspan="4" class="table-cell font-bold">Formative Assessment (100%)</td></tr><tr class="bg-white"><td class="table-cell pl-8">• Rubric-Based Assessments</td><td class="table-cell">80%</td><td class="table-cell">Tangible outputs such as persuasive essays, detailed problem-solving plans, or personal growth journals.</td><td class="table-cell"><strong>Writing:</strong> Clarity, Structure, Audience Awareness, Persuasive Tone. <br> <strong>Problem Solving:</strong> Accurate Identification of Variables, Logical Process, Evaluation of Options.</td></tr><tr class="bg-white"><td class="table-cell pl-8">• Scored Assessments</td><td class="table-cell">20%</td><td class="table-cell">Testing understanding of basic principles like grammar, logical fallacies, or concepts of mental health.</td><td class="table-cell">N/A</td></tr>`
+            },
+        };
+
+        let myChart;
+        const contentArea = document.getElementById('content-area');
+        const mainTitle = document.getElementById('main-title');
+        const desktopNav = document.getElementById('desktop-nav');
+        const mobileNav = document.getElementById('mobile-nav');
+
+        function updateView(subjectKey) {
+            const data = assessmentData[subjectKey];
+            mainTitle.textContent = data.title;
+            
+            contentArea.classList.remove('content-fade-in');
+            void contentArea.offsetWidth; 
+
+            contentArea.innerHTML = '';
+
+            if (data.isSummary) {
+                contentArea.innerHTML = data.content;
+            } else {
+                const contentHTML = `
+                    <div class="card p-6 mb-8">
+                        <p class="text-gray-600">${data.objective}</p>
+                    </div>
+                    <div class="grid grid-cols-1 xl:grid-cols-5 gap-8">
+                        <div class="xl:col-span-2 card p-6">
+                            <h3 class="text-lg font-semibold mb-4 text-center">Assessment Breakdown</h3>
+                            <div class="chart-container">
+                                <canvas id="assessmentChart"></canvas>
+                            </div>
+                        </div>
+                        <div class="xl:col-span-3 card p-6 overflow-x-auto">
+                             <table class="w-full text-left border-collapse">
+                                <thead>
+                                    <tr class="bg-[#F5F1EC]">
+                                        <th class="table-cell font-semibold">Assessment Component</th>
+                                        <th class="table-cell font-semibold">Weight (%)</th>
+                                        <th class="table-cell font-semibold">Details</th>
+                                        <th class="table-cell font-semibold">Rubric Criteria Examples</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    ${data.tableData}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                `;
+                contentArea.innerHTML = contentHTML;
+                renderChart(data.chartData);
+            }
+            
+            contentArea.classList.add('content-fade-in');
+
+            document.querySelectorAll('.nav-link').forEach(link => {
+                link.classList.toggle('active', link.dataset.subject === subjectKey);
+            });
+            mobileNav.value = subjectKey;
+        }
+
+        function renderChart(chartData) {
+            const ctx = document.getElementById('assessmentChart').getContext('2d');
+            if (myChart) {
+                myChart.destroy();
+            }
+            myChart = new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels: chartData.labels,
+                    datasets: [{
+                        data: chartData.values,
+                        backgroundColor: ['#A98D6D', '#C3B099', '#D8CDBE', '#EAE2D9', '#8C6D46', '#B99A78'],
+                        borderColor: '#FDFBF8',
+                        borderWidth: 4,
+                        hoverOffset: 8,
+                        hoverBorderColor: '#fff',
+                        hoverBorderWidth: 4,
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    animation: {
+                        animateScale: true,
+                        animateRotate: true
+                    },
+                    plugins: {
+                        legend: {
+                            position: 'bottom',
+                            labels: {
+                                padding: 20,
+                                boxWidth: 15,
+                                font: {
+                                    size: 14
+                                }
+                            }
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    let label = context.label || '';
+                                    if (label) {
+                                        label += ': ';
+                                    }
+                                    if (context.parsed !== null) {
+                                        label += context.parsed + '%';
+                                    }
+                                    return label;
+                                }
+                            },
+                            padding: 10,
+                            bodyFont: {
+                                size: 14
+                            },
+                            titleFont: {
+                                size: 16
+                            },
+                            backgroundColor: '#4A4A4A',
+                            titleColor: '#fff',
+                            bodyColor: '#fff',
+                            borderColor: 'rgba(0,0,0,0.1)',
+                            borderWidth: 1,
+                            displayColors: false,
+                        }
+                    },
+                    cutout: '60%'
+                }
+            });
+        }
+
+        function init() {
+            const navGroups = {
+                'Overview': { 'summary': { name: 'Summary', icon: '📜' } },
+                'Core Subjects': { 'english': { name: 'English', icon: '📚' }, 'maths': { name: 'Maths', icon: '➗' }, 'science': { name: 'Science', icon: '🔬' } },
+                'Humanities': { 'history': { name: 'History', icon: '🏛️' }, 'geography': { name: 'Geography', icon: '🌍' }, 'globalSkills': { name: 'Global Skills', icon: '🌐' } },
+                'Languages': { 'thai': { name: 'Thai', icon: '🇹🇭' }, 'chinese': { name: 'Chinese', icon: '🇨🇳' } },
+                'Technical Skills': { 'ict': { name: 'ICT', icon: '💻' }, 'dataLiteracy': { name: 'Data Literacy', icon: '📈' } },
+                'Creative & Physical': { 'art': { name: 'ART', icon: '🎨' }, 'music': { name: 'Music', icon: '🎵' }, 'sportClub': { name: 'Sport Club', icon: '⚽' } },
+                'Core Competencies': { 'writingPresentation': { name: 'Writing & Presentation', icon: '✍️' }, 'problemSolving': { name: 'Problem Solving', icon: '🧩' }, 'wellbeing': { name: 'Wellbeing', icon: '🧘' } }
+            };
+
+            desktopNav.innerHTML = '';
+            mobileNav.innerHTML = '';
+
+            for (const groupName in navGroups) {
+                const groupHeader = document.createElement('div');
+                groupHeader.className = 'nav-group-header';
+                
+                const groupIcon = document.createElement('span');
+                const firstIcon = navGroups[groupName][Object.keys(navGroups[groupName])[0]].icon;
+                groupHeader.innerHTML = `<span>${firstIcon}</span> ${groupName}`;
+                desktopNav.appendChild(groupHeader);
+
+                const optgroup = document.createElement('optgroup');
+                optgroup.label = groupName;
+
+                for (const subjectKey in navGroups[groupName]) {
+                    const subject = navGroups[groupName][subjectKey];
+                    
+                    const desktopLink = document.createElement('a');
+                    desktopLink.href = '#';
+                    desktopLink.className = 'nav-link flex items-center p-3 rounded-lg text-gray-700';
+                    desktopLink.dataset.subject = subjectKey;
+                    desktopLink.innerHTML = `<span class="w-6 text-center mr-2">${subject.icon}</span> <span>${subject.name}</span>`;
+                    desktopNav.appendChild(desktopLink);
+
+                    const mobileOption = document.createElement('option');
+                    mobileOption.value = subjectKey;
+                    mobileOption.textContent = subject.name;
+                    optgroup.appendChild(mobileOption);
+                }
+                mobileNav.appendChild(optgroup);
+            }
+
+            desktopNav.addEventListener('click', (e) => {
+                e.preventDefault();
+                const link = e.target.closest('.nav-link');
+                if (link && link.dataset.subject) {
+                    updateView(link.dataset.subject);
+                }
+            });
+
+            mobileNav.addEventListener('change', (e) => {
+                updateView(e.target.value);
+            });
+
+            updateView('summary');
+        }
+
+        document.addEventListener('DOMContentLoaded', init);
+    </script>
+</body>
+</html>
